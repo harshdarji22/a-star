@@ -1,0 +1,759 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>DFS</title>
+<script type="text/javascript" src="d3.js"></script>
+<script type="text/javascript" src="gdatatree1.js"></script>
+<script type="text/javascript" src="mappingtree.js"></script>
+
+
+<script>
+var dataFrames=new Array();
+var nframes=0;
+var state=0;
+var currentFrame=0;
+var num=0;
+var time=500;
+var minx=0;
+var maxx=800;
+var miny=0;
+var maxy=500;
+var offsety=50;
+var firsttime=true;
+var travnumber=0;
+var closed=new Array();
+var messageArray=[[20,550,22,"black","normal"],
+                  [20,570,22,"black","normal"],
+                  [600,200,22,"blue","normal"],
+                  [20,20,28,"black","bold"],
+                  [20,50,28,"black","normal"],
+                  [585,550,28,"black","normal"]];
+
+
+function init(svg,data){
+
+   var vert=data.graph.vertices;
+   var edge=data.graph.edges;
+   var tree=data.tree;
+   var labels=data.labels;
+   var mov=data.movables;
+
+
+//movables
+    svg.selectAll("rect")
+      .data(mov)
+      .enter()
+      .append("rect")
+        .attr("x", getMovX)
+        .attr("y", getMovY) 
+        .attr("width",  getMovW) 
+        .attr("height",  getMovH) 
+        .attr("stroke",getMovStrokeColor)
+        .attr("stroke-width","1")
+        .attr("fill",getMovColor);
+
+
+//graph edges
+    svg.selectAll("line")
+      .data(edge)
+      .enter()
+      .append("line") 
+        .attr("x1", getLineX1)
+        .attr("y1", getLineY1)
+        .attr("x2", getLineX2)
+        .attr("y2", getLineY2)
+        .attr("stroke","black")
+        .attr("stroke-width","1");
+
+//vertices
+    svg.selectAll("circle")
+      .data(vert)
+      .enter()
+      .append("circle") 
+        .attr("cx", getCircleX)
+        .attr("cy", getCircleY) 
+        .attr("r",  getCircleR) 
+        .attr("fill",getCircleColor);
+
+
+//labels
+    svg.selectAll("text")
+      .data(labels)
+      .enter()
+      .append("text") 
+        .attr("x", getLabelX)
+        .attr("y", getLabelY)
+        .attr("font-size",getLabelSize)
+        .attr("font-weight",getLabelWeight)
+        .attr("opacity",getLabelOpacity)
+        .text(getLabel); 
+
+//arrowheads
+    svg.selectAll("path")
+      .data(edge)
+      .enter()
+      .append("path") 
+      .attr("d", getArrow);
+}
+
+
+function update(svg,data){
+   data1=cloneObject(data);
+   nframes++;
+   dataFrames.push(data1);
+}
+
+
+function updatesvg(svg,data){
+
+   var vert=data.graph.vertices;
+   var edge=data.graph.edges;
+   var tree=data.tree;
+   var labels=data.labels;
+   var mov=data.movables;
+
+
+//movables
+    svg.selectAll("rect")
+      .data(mov)
+      .transition().duration(time).delay(num*time)
+        .attr("x", getMovX)
+        .attr("y", getMovY) 
+        .attr("width",  getMovW) 
+        .attr("height",  getMovH) 
+        .attr("stroke",getMovStrokeColor)
+        .attr("stroke-width","1")
+        .attr("fill",getMovColor);
+
+//edges
+    svg.selectAll("line")
+      .data(edge)
+      .transition().duration(time).delay(num*time)
+        .attr("stroke-dasharray",getDashArray)
+        .attr("stroke",getLineColor)
+        .attr("stroke-width",getLineWidth)
+        .attr("stroke-opacity",getLineOpacity)
+        .attr("x1", getLineX1)
+        .attr("y1", getLineY1)
+        .attr("x2", getLineX2)
+        .attr("y2", getLineY2);
+
+//vertex labels
+    svg.selectAll("text")
+      .data(labels)
+      .transition().duration(time).delay(num*time)
+        .attr("x", getLabelX)
+        .attr("y", getLabelY)
+        .text(getLabel)
+        .attr("font-size",getLabelSize)
+        .attr("opacity",getLabelOpacity)
+        .attr("font-weight",getLabelWeight);
+
+//vertices
+    svg.selectAll("circle")
+      .data(vert)
+      .transition().duration(time).delay(num*time)
+        .attr("cx", getCircleX)
+        .attr("cy", getCircleY) 
+        .attr("r",  getCircleR) 
+        .attr("fill",getCircleColor);
+
+
+//arrowheads
+    svg.selectAll("path")
+      .data(edge)
+      .transition().duration(time).delay(num*time)
+        .attr("d", getArrow)
+        .attr("fill","black")
+        .attr("stroke","black");
+
+   num++;
+}
+
+function update_message(num,message){
+   data.labels[data.message_index+num].value=message;
+}
+
+function visited(v){
+   var visit=false;
+   var vis=data.visited;
+   for (var i=0;i<vis.length;i++){
+      if (vis[i]==v)
+         visit=true;
+   }
+   return visit;
+}
+
+function inqueue(v,q){
+   var visit=false;
+   var vis=q;
+   for (var i=0;i<vis.length;i++){
+      if (vis[i]==v)
+         visit=true;
+   }
+   return visit;
+}
+
+function getQueuePos(vid){
+   var q=data.queue;
+   for (var i=0;i<q.length;i++){
+      if (q[i]==vid)
+         return i;
+   }
+   return -1;
+}
+
+function getVertex(v){
+   var retV=null;
+   var vertices=data.graph.vertices;
+   for (var i=0;i<vertices.length;i++){
+      if (vertices[i].id==v)
+         retV=vertices[i];
+   }
+   return retV;
+}
+
+function getEdge(v1,v2){
+   var retE=null;
+   var edges=data.graph.edges;
+   for (var i=0;i<edges.length;i++){
+      if (edges[i].inV==v1 && edges[i].outV==v2){
+         retE=edges[i];
+      }
+   }
+   return retE;
+}
+	
+//==============================================================================================================================
+
+var binaryHeap = function(comp) {
+
+  comp = function(a, b) {
+    return a<=b;
+  };
+
+  var arr = [];
+
+  var swap = function(a, b) {
+    var temp = arr[a];
+    arr[a] = arr[b];
+    arr[b] = temp;
+  };
+
+  var bubbleDown = function(pos) {
+    var left = 2 * pos + 1;
+    var right = left + 1;
+    var largest = pos;
+    if (left < arr.length && comp(arr[left][1], arr[largest][1])) {
+      largest = left;
+    }
+    if (right < arr.length && comp(arr[right][1], arr[largest][1])) {
+      largest = right;
+    }
+    if (largest != pos) {
+      swap(largest, pos);
+      bubbleDown(largest);
+    }
+  };
+
+  var bubbleUp = function(pos) {
+    if (pos <= 0) {
+      return;
+    }
+    var parent = Math.floor((pos - 1) / 2);
+    if (comp(arr[pos][1], arr[parent][1])) {
+      swap(pos, parent);
+      bubbleUp(parent);
+    }
+  };
+
+  var that = {};
+
+  that.pop = function() {
+    if (arr.length === 0) {
+      //throw new Error("pop() called on emtpy binary heap");
+	  alert("No Path");
+    }
+    var value = arr[0];
+    var last = arr.length - 1;
+    arr[0] = arr[last];
+    arr.length = last;
+    if (last > 0) {
+      bubbleDown(0);
+    }
+	var s="Binary Heap (V,F) :";
+	for (var j=arr.length-1;j>=0;j--){
+		s=s+"("+arr[j][0]+":"+arr[j][1]+")"+"\n";
+		}
+	update_message(0,s);
+	update_message(2,"POP from Binary Heap");
+	update(svg,data);
+    return value;
+  };
+
+  that.push = function(value) {
+    arr.push(value);
+	var s="Binary Heap (V,F) :";
+	for (var j=arr.length-1;j>=0;j--){
+		s=s+"("+arr[j][0]+":"+arr[j][1]+")"+"\n";
+		}
+	update_message(0,s);
+	update_message(2,"PUSH into Binary Heap");
+	update(svg,data);
+    bubbleUp(arr.length - 1);
+  };
+
+  that.size = function() {
+    return arr.length;
+  };
+
+  return that;
+};
+
+//==============================================================================================================================
+function neighbour(v,g){
+	e=data.graph.edges;
+	var nv;
+	var vertex1=getVertex(ev);
+	for(var i=0;i<e.length;i++){
+		var ov=e[i].outV;
+		var iv=e[i].inV;
+		var vertex2=getVertex(iv);
+		var vertex3=getVertex(ov);
+		if(vertex3.id==v.id && !(visited(vertex2.id)) && vertex2.type!="xyz"){
+			var h=(Math.abs(vertex2.x-vertex1.x)+Math.abs(vertex2.y-vertex1.y))/75
+			var f=g+h;
+			var x=Array(vertex2.id,f);
+			vertex2.type="abc";
+			update(svg,data);
+			data.bh.push(x);
+		}
+	}
+	var x=data.bh.pop();
+	nv=x[0];
+	return nv;
+}
+
+function Astar(svg,v){
+   var msg="";
+   if (firsttime){
+      firsttime=false;
+      msg=" start by ";
+   }
+   else
+   {
+      msg=" continue ";
+   }
+   travnumber++;
+   if(v==ev){return;}
+   //update_message(0,"We"+msg+"by visiting vertex "+v);
+   update_message(1,"");
+   update_message(2,"FORWARD");
+   data.current=v;
+   data.movables[0].id=v;
+   update(svg,data);
+   //data.visited.push(v);
+   //alert(data.visited);
+   var vertex1=getVertex(v);
+   vertex1.type="xyz";
+   vertex1.pre=travnumber;
+   var q=data.queue;
+   var nv=neighbour(vertex1,travnumber);
+   //alert("after nv");
+   var vertex=getVertex(nv);
+   vertex.type="look";
+   var edg=getEdge(v,nv);
+   edg.type="tree";
+   var bedge=getEdge(nv,v);
+   bedge.type="btree";
+   update(svg,data);
+   q=data.queue;
+   q.push(nv);
+   Astar(svg,nv);
+   data.current=v;
+   //data.movables[0].id=v;
+  /* 
+   for (var i=0;i<edg.length;i++){
+      var v1=edg[i].inV;
+      var v2=edg[i].outV;
+      if ( v1==v)
+      {
+         var vertex=getVertex(v2);
+         var prevtype=vertex.type;
+         vertex.type="look";
+         if (!visited(v2) ){
+            edg[i].type="tree";
+            var bedge=getEdge(v2,v1);
+            bedge.type="btree";
+            update_message(0,"From here ("+v1+") we can visit vertex "+v2);
+            update_message(1,"and add it to the DFS tree");
+            update(svg,data);
+            q=data.queue;
+            q.push(v2);
+            dfs(svg,v2);
+            data.current=v;
+            data.movables[0].id=v;
+         }
+         else
+         {
+            var bedge=getEdge(v2,v1);
+            if (bedge.type!="tree" && bedge.type!="back"){
+               edg[i].type="back";
+               update_message(0,"From here ("+v1+") we now try to visit vertex "+v2);
+               update_message(1,"but it was already visited");
+               update(svg,data);
+               // edg[i].type="none";
+            }
+            else{
+               edg[i].type="none";
+            }
+         }
+         if (vertex.type!="done")
+            vertex.type=prevtype;
+      } //if
+   } //for
+   travnumber++;
+   vertex1.post=travnumber;
+   vertex1.type="done";
+   update_message(0,"We are done visiting all we could from vertex "+vertex1.id);
+   update_message(1,"so we backtrack the previous vertex on the tree");
+   update_message(2,"BACKTRACK");
+   data.movables[0].id=v;
+   q.pop();
+   update(svg,data);*/
+} 
+
+function backtrack(){
+var q=data.queue;
+var j=q.length;
+for (var i=0;i<j;i++){
+var x=q.pop();
+data.movables[0].id=x;
+data.visited.push(x);
+var v=getVertex(x);
+v.type="pending";
+update(svg,data);
+update_message(2,"BACKTRACK");
+//update_message(0,"We backtrack through vertex "+x);
+}
+}
+
+//==============================================================================================================================
+
+function restore_data(){
+   data.height=0;
+   for (var i=0;i<data.maxlevel.length;i++){
+      if (data.maxlevel[i]>data.height)
+         data.height=data.maxlevel[i];
+   }
+   data.visited=new Array();
+   data.current=current;
+   data.tree=new Array();
+}
+
+
+function set_labels(){
+   for (var i=0;i<data.graph.vertices.length;i++){
+        label=new Object;
+        label.type="vertex";
+        label.value=data.graph.vertices[i].id;
+        data.labels.push(label);
+
+        label=new Object;
+        label.type="queue";
+        label.value=data.graph.vertices[i].id;
+        data.labels.push(label);
+
+        data.graph.vertices[i].type="normal";
+        data.graph.vertices[i].pre=0;
+        data.graph.vertices[i].post=0;
+        data.graph.vertices[i].pred=0;
+   }
+// there are four message areas (0...3)
+   for(var j=0;j<messageArray.length;j++){
+      label=new Object;
+      label.type="message";
+      label.value="";
+      label.number=j;
+      data.labels.push(label);
+   }
+   data.message_index=2*i; //start of message locations
+   update_message(3,data.title1);
+   update_message(4,data.title2);
+   update_message(0,"Binary Heap");
+   for (var i=0;i<data.graph.edges.length;i++){
+         data.graph.edges[i].type="none";
+     }
+
+   movable=new Object;
+   movable.id=data.current;
+   movable.type="other";
+   data.movables.push(movable);
+
+   for (var i=0;i<data.graph.vertices.length;i++){
+      movable=new Object;
+      movable.id=data.graph.vertices[i].id;
+      movable.type="queue";
+      data.movables.push(movable);
+   }
+}
+
+/*
+function resetAll(){
+   location.reload(true);
+}
+*/
+
+function resetAll(){
+//   location.reload(true);
+   if (state==1 || state==2){
+      state=0;
+      currentFrame=0;
+      nframes=0;
+      dataFrames=new Array();
+	  data=data1;
+	  var sv=data.start;
+	  var ev=data.end;
+	  var bh=binaryHeap();
+	  data.bh=bh;
+      //if (location.search.substring(1)=="1")
+        // data=data1;
+		 //window.alert(data);
+    //  if (location.search.substring(1)=="2")
+      //   data=data2;
+  data.current=Number(document.getElementById('svertex').value);
+         time=document.getElementById('speed').value;
+         num=0;
+         travnumber=0;
+         var atime=time;
+         var q=data.queue;
+         q=new Array();
+         q.push(data.current);
+         initGraph();
+         var edg=data.graph.edges;
+         var svg=d3.select("body").select("svg");
+         svg.selectAll("*").remove();
+         set_labels();
+         init(svg,data);
+     }
+ }
+
+
+function initGraph(){
+   data.visited=new Array();
+   data.tree=[];
+   data.level=[];
+   data.maxlevel=[];
+   data.labels=[];
+   data.movables=[];
+   data.message_index=0;
+}
+
+
+function cloneObject(obj) {
+    if (obj === null || typeof obj !== 'object') {
+        return obj;
+    }
+    var temp = obj.constructor(); 
+    for (var key in obj) {
+        temp[key] = cloneObject(obj[key]);
+    }
+    return temp;
+}
+
+
+function nextFrame(svg){
+      if (currentFrame+1<nframes){
+           currentFrame++;
+           data=dataFrames[currentFrame];
+           updatesvg(svg,data);
+      }
+}
+
+function prevFrame(svg){
+      if (currentFrame>0){
+           currentFrame--;
+           data=dataFrames[currentFrame];
+           updatesvg(svg,data);
+      }
+}
+
+function animate(){
+   if (state==2){
+      var svg=d3.select("body").select("svg");
+      if (currentFrame+1<nframes){
+           currentFrame++;
+           data=dataFrames[currentFrame];
+           updatesvg(svg,data);
+      }
+      else{
+         state=1;
+      }
+      setTimeout(animate,time);
+   }
+}
+
+
+function setListeners(){
+   document.getElementById('setspeed').onclick=function(event){
+      time=document.getElementById('speed').value;
+      // document.write(time+"<br>");
+   }
+
+   document.getElementById('init').onclick=function(event){
+      if (state==0){
+         state=1;
+         num=0;
+         initGraph();
+         var edg=data.graph.edges;
+         var svg=d3.select("body").select("svg");
+         set_labels();
+         var q=data.queue;
+         q.push(data.current);
+         init(svg,data);
+		 var bh=binaryHeap();
+		 data.bh=bh;
+// --------------------------------------------------------
+// the algorithm goes here
+// --------------------------------------------------------
+		 Astar(svg,data.current);
+		 backtrack();
+         update_message(0,"");
+         update_message(1,"");
+         update_message(2,"DONE");
+         data.current=-1;
+         update(svg,data);
+      }
+   }
+
+   document.getElementById('pause').onclick=function(event){
+      if (state==2){
+         state=1;
+      }
+   }
+
+   document.getElementById('play').onclick=function(event){
+      if (state==1){
+         state=2;
+         var svg=d3.select("body").select("svg");
+         num=0;
+         setTimeout(animate,1);
+      }
+   }
+   
+
+   document.getElementById('prev').onclick=function(event){
+      if (state==1){
+         var svg=d3.select("body").select("svg");
+         num=0;
+         prevFrame(svg);
+      }
+   }
+
+   document.getElementById('next').onclick=function(event){
+      if (state==1){
+         var svg=d3.select("body").select("svg");
+         num=0;
+         nextFrame(svg);
+      }
+   }
+
+   document.getElementById('stop').onclick=function(event){
+      resetAll();
+   }
+
+
+   document.getElementById('setvertex').onclick=function(event){
+      data.current=Number(document.getElementById('svertex').value);
+      data.start=Number(document.getElementByID('svertex').value);
+	  sv=data.start;
+	  num=0;
+      var atime=time;
+      time=0;
+      initGraph();
+      var edg=data.graph.edges;
+      var svg=d3.select("body").select("svg");
+      set_labels();
+      update(svg,data);
+      time=atime;
+   }
+   
+   document.getElementById('setend').onclick=function(event){
+      data.end=Number(document.getElementById('severtex').value);
+	  ev=data.end;
+      num=0;
+      var atime=time;
+      time=0;
+      initGraph();
+      var edg=data.graph.edges;
+      var svg=d3.select("body").select("svg");
+      set_labels();
+      update(svg,data);
+      time=atime;
+   }
+}
+
+
+</script>
+</head>
+
+<body>
+<svg width="1000" height="600">
+</svg>
+
+<table>
+<tr>
+<td><button id='setspeed'>Set Speed </button></td>
+<td><input id='speed' type='text'></td>
+<td>(in milliseconds)</td>
+</tr>
+<tr>
+<td><button id='setvertex'>Set start vertex </button></td>
+<td><input id='svertex' type='text'></td>
+</tr>
+<tr>
+<td><button id='setend'>Set end vertex </button></td>
+<td><input id='severtex' type='text'></td>
+</tr>
+<tr>
+<td><button id='init'>Initialize</button></td>
+<td><button id='stop'>Reset</button></td>
+<td>(Reset animation before Initializing again)</td>
+</tr>
+<tr>
+<td><button id='prev'>previous</button></td>
+<td><button id='next'>next</button></td>
+<td><button id='pause'>pause</button> (might take time to respond) </td></tr>
+<tr>
+<td><button id='play'>play</button></td>
+</tr>
+</table><br>
+<p id='debug'></p>
+
+<script>
+var data;
+data=data1;
+//if (location.search.substring(1)=="1")
+ //  data=data1;
+//if (location.search.substring(1)=="2")
+  // data=data2;
+var sv=data.start;
+var ev=data.end;
+setListeners();
+
+document.getElementById('speed').value=time;
+document.getElementById('svertex').value=data.current;
+document.getElementById('severtex').value=data.end;
+      initGraph();
+
+      var svg=d3.select("body").select("svg");
+      set_labels();
+
+
+      init(svg,data);
+
+
+</script>
+</body>
+</html>
